@@ -24,6 +24,10 @@ interface EventDao {
     @Query("SELECT * FROM events")
     suspend fun getAll(): List<EventEntity>
 
+    /** Ещё не закончившиеся события, ближайшие первыми. */
+    @Query("SELECT * FROM events WHERE endUtcMillis > :now ORDER BY startUtcMillis LIMIT :limit")
+    suspend fun upcoming(now: Long, limit: Int): List<EventEntity>
+
     @Insert
     suspend fun insert(e: EventEntity): Long
 

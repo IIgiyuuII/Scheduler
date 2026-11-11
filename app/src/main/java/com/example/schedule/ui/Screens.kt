@@ -1,23 +1,40 @@
 package com.example.schedule.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
-import com.example.schedule.data.EventEntity
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import com.example.schedule.R
+import com.example.schedule.data.EventEntity
 import com.example.schedule.domain.ConflictChecker
 import com.example.schedule.domain.ParseResult
 import com.example.schedule.domain.TimeSlot
 import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+private val examples = listOf(
+    "завтра в 15:00 консультация",
+    "послезавтра в 9 сдать лабу",
+    "в пятницу в 18 встреча в 305 аудитории",
+    "через 2 часа созвон",
+    "25 ноября в 12:30 экзамен",
+)
 
 @Composable
 fun AddScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
@@ -29,17 +46,24 @@ fun AddScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
     var date by rememberSaveable { mutableStateOf("") }   // ГГГГ-ММ-ДД
     var time by rememberSaveable { mutableStateOf("") }   // ЧЧ:ММ
     var note by rememberSaveable { mutableStateOf("") }
+    var remind by rememberSaveable { mutableStateOf("15") }
 
     Column(
-        modifier.padding(16.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        OutlinedTextField(
-            phrase, { phrase = it },
-            label = { Text("Например: завтра в 15:00 консультация") },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        AppField(phrase, { phrase = it }, "Что и когда?", R.drawable.ic_sparkle)
+
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            examples.forEach { ex -> SuggestionPill(ex) { phrase = ex } }
+        }
+
         Button(
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(16.dp),
             enabled = phrase.isNotBlank(),
             onClick = {
                 when (val r = vm.parse(phrase)) {
@@ -64,7 +88,11 @@ fun AddScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
                 }
                 showForm = true
             },
-        ) { Text("Разобрать") }
+        ) {
+            AppIcon(R.drawable.ic_sparkle, size = 20.dp)
+            Spacer(Modifier.width(8.dp))
+            Text("Разобрать", style = MaterialTheme.typography.titleMedium)
+        }
 
         if (showForm) {
             val start = runCatching {
@@ -76,26 +104,49 @@ fun AddScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
                 events.map { TimeSlot(it.id, it.title, it.startUtcMillis, it.endUtcMillis) },
             )
 
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (note.isNotEmpty()) Text(note, color = MaterialTheme.colorScheme.error)
-                    OutlinedTextField(title, { title = it }, label = { Text("Название") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(place, { place = it }, label = { Text("Место") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(date, { date = it }, label = { Text("Дата (ГГГГ-ММ-ДД)") }, modifier = Modifier.fillMaxWidth())
-                    OutlinedTextField(time, { time = it }, label = { Text("Время (ЧЧ:ММ)") }, modifier = Modifier.fillMaxWidth())
-                    if (conflicts.isNotEmpty()) {
-                        Text(
-                            "Пересекается с: " + conflicts.joinToString { it.title },
-                            color = MaterialTheme.colorScheme.error,
-                        )
+            Card(
+                Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+            ) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIcon(R.drawable.ic_calendar, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Новое событие", style = MaterialTheme.typography.titleMedium)
                     }
-                    Button(
-                        enabled = start != null && title.isNotBlank(),
-                        onClick = {
-                            vm.save(title, place, start!!)
-                            showForm = false; phrase = ""
-                        },
-                    ) { Text("Подтвердить") }
+                    if (note.isNotEmpty()) Banner(note, isError = false)
+                    AppField(title, { title = it }, "Название", null)
+                    AppField(place, { place = it }, "Место", R.drawable.ic_location)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        AppField(date, { date = it }, "Дата (ГГГГ-ММ-ДД)", R.drawable.ic_calendar, Modifier.weight(1f))
+                        AppField(time, { time = it }, "Время", R.drawable.ic_clock, Modifier.weight(0.8f))
+                    }
+                    AppField(remind, { remind = it }, "Напомнить за (мин, 0 — в момент начала)", R.drawable.ic_bell)
+                    if (conflicts.isNotEmpty()) {
+                        Banner("Пересекается с: " + conflicts.joinToString { it.title }, isError = true)
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TextButton(onClick = { showForm = false }) { Text("Отмена") }
+                        Button(
+                            modifier = Modifier.weight(1f).height(48.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            enabled = start != null && title.isNotBlank() && remind.trim().toIntOrNull() != null,
+                            onClick = {
+                                vm.save(title, place, start!!, remind.trim().toInt())
+                                showForm = false; phrase = ""
+                            },
+                        ) {
+                            AppIcon(R.drawable.ic_check, size = 20.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Подтвердить")
+                        }
+                    }
                 }
             }
         }
@@ -109,23 +160,46 @@ private fun EventEntity.endLocal(): ZonedDateTime =
     Instant.ofEpochMilli(endUtcMillis).atZone(ZoneId.systemDefault())
 
 @Composable
-fun AgendaScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
+fun AgendaScreen(
+    vm: EventViewModel,
+    openEventId: Long,
+    onOpenHandled: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val events by vm.events.collectAsState()
     var query by rememberSaveable { mutableStateOf("") }
     var mode by rememberSaveable { mutableIntStateOf(0) }            // 0 — день, 1 — неделя
     var anchorIso by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var editingId by rememberSaveable { mutableLongStateOf(-1L) }
 
+    // Событие, открытое из виджета: переходим на его день и показываем карточку для просмотра/правки
+    LaunchedEffect(openEventId, events) {
+        if (openEventId >= 0) {
+            events.firstOrNull { it.id == openEventId }?.let { e ->
+                query = ""
+                mode = 0
+                anchorIso = e.startLocal().toLocalDate().toString()
+                editingId = e.id
+                onOpenHandled()
+            }
+        }
+    }
+
     val ru = Locale("ru")
     val dayFmt = DateTimeFormatter.ofPattern("EEEE, d MMMM", ru)
     val shortFmt = DateTimeFormatter.ofPattern("d MMM", ru)
-    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
 
+    val today = LocalDate.now()
     val anchor = LocalDate.parse(anchorIso)
     val searching = query.isNotBlank()
     val rangeStart = if (mode == 0) anchor else anchor.with(DayOfWeek.MONDAY)
     val rangeEnd = if (mode == 0) rangeStart else rangeStart.plusDays(6)
     val step = if (mode == 0) 1L else 7L
+
+    fun dayTitle(d: LocalDate): String {
+        val t = d.format(dayFmt).replaceFirstChar { it.uppercase() }
+        return if (d == today) "Сегодня · $t" else t
+    }
 
     // При поиске ищем по всем событиям, иначе показываем выбранный день или неделю
     val visible = if (searching) {
@@ -139,65 +213,76 @@ fun AgendaScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
     }
     val groups = visible.groupBy { it.startLocal().toLocalDate() }.toList()
 
-    Column(modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            query, { query = it },
-            label = { Text("Поиск по событиям") },
-            modifier = Modifier.fillMaxWidth(),
-        )
+    Column(
+        modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        AppField(query, { query = it }, "Поиск по событиям", R.drawable.ic_search)
+
         if (!searching) {
-            TabRow(selectedTabIndex = mode) {
-                Tab(selected = mode == 0, onClick = { mode = 0 }, text = { Text("День") })
-                Tab(selected = mode == 1, onClick = { mode = 1 }, text = { Text("Неделя") })
-            }
+            Segmented(listOf("День", "Неделя"), mode) { mode = it }
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                TextButton(onClick = { anchorIso = anchor.minusDays(step).toString() }) { Text("‹") }
-                TextButton(onClick = { anchorIso = LocalDate.now().toString() }) {
+                IconButton(onClick = { anchorIso = anchor.minusDays(step).toString() }) {
+                    AppIcon(R.drawable.ic_chevron_left)
+                }
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .clickable { anchorIso = today.toString() }
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppIcon(R.drawable.ic_calendar, tint = MaterialTheme.colorScheme.onPrimaryContainer, size = 18.dp)
+                    Spacer(Modifier.width(8.dp))
                     Text(
-                        if (mode == 0) anchor.format(dayFmt)
-                        else rangeStart.format(shortFmt) + " – " + rangeEnd.format(shortFmt)
+                        if (mode == 0) dayTitle(anchor)
+                        else rangeStart.format(shortFmt) + " – " + rangeEnd.format(shortFmt),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
-                TextButton(onClick = { anchorIso = anchor.plusDays(step).toString() }) { Text("›") }
+                IconButton(onClick = { anchorIso = anchor.plusDays(step).toString() }) {
+                    AppIcon(R.drawable.ic_chevron_right)
+                }
             }
         }
 
         if (groups.isEmpty()) {
-            Text(
-                when {
-                    searching -> "Ничего не найдено"
-                    mode == 0 -> "На этот день событий нет"
-                    else -> "На этой неделе событий нет"
-                }
-            )
+            Column(
+                Modifier.fillMaxWidth().padding(top = 48.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                AppIcon(R.drawable.ic_calendar, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), size = 72.dp)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    when {
+                        searching -> "Ничего не найдено"
+                        mode == 0 -> "На этот день событий нет"
+                        else -> "На этой неделе событий нет"
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 groups.forEach { (day, list) ->
                     if (mode == 1 || searching) {
                         item(key = "h$day") {
                             Text(
-                                day.format(dayFmt).replaceFirstChar { it.uppercase() },
+                                dayTitle(day),
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 6.dp),
                             )
                         }
                     }
                     items(list, key = { it.id }) { e ->
-                        Card(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp)) {
-                                Text(e.title, style = MaterialTheme.typography.titleMedium)
-                                Text(e.startLocal().format(timeFmt) + " – " + e.endLocal().format(timeFmt))
-                                e.location?.let { Text(it) }
-                                Row {
-                                    TextButton(onClick = { editingId = e.id }) { Text("Изменить") }
-                                    TextButton(onClick = { vm.delete(e) }) { Text("Удалить") }
-                                }
-                            }
-                        }
+                        EventCard(e, onEdit = { editingId = e.id }, onDelete = { vm.delete(e) })
                     }
                 }
             }
@@ -208,8 +293,60 @@ fun AgendaScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
         EditDialog(
             e, events,
             onDismiss = { editingId = -1L },
-            onSave = { t, p, st -> vm.update(e, t, p, st); editingId = -1L },
+            onSave = { t, p, st, r -> vm.update(e, t, p, st, r); editingId = -1L },
         )
+    }
+}
+
+@Composable
+private fun EventCard(e: EventEntity, onEdit: () -> Unit, onDelete: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    val timeFmt = DateTimeFormatter.ofPattern("HH:mm")
+    val past = e.endUtcMillis < System.currentTimeMillis()
+
+    Card(
+        Modifier.fillMaxWidth().alpha(if (past) 0.6f else 1f),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(containerColor = cs.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    ) {
+        Row(Modifier.height(IntrinsicSize.Min)) {
+            Box(
+                Modifier.width(5.dp).fillMaxHeight()
+                    .background(Brush.verticalGradient(listOf(Brand1, Brand2)))
+            )
+            Column(Modifier.padding(start = 14.dp, top = 12.dp, bottom = 12.dp).width(58.dp)) {
+                Text(e.startLocal().format(timeFmt), style = MaterialTheme.typography.titleMedium, color = cs.primary)
+                Text(e.endLocal().format(timeFmt), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            }
+            Column(Modifier.weight(1f).padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(e.title, style = MaterialTheme.typography.titleMedium, color = cs.onSurface)
+                e.location?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIcon(R.drawable.ic_location, tint = cs.onSurfaceVariant, size = 16.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppIcon(R.drawable.ic_bell, tint = cs.onSurfaceVariant, size = 16.dp)
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        if (e.remindMinutes == 0) "в момент начала" else "за ${e.remindMinutes} мин",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+            }
+            Row(Modifier.padding(end = 4.dp).align(Alignment.CenterVertically)) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(40.dp)) {
+                    AppIcon(R.drawable.ic_edit, tint = cs.primary, size = 20.dp)
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(40.dp)) {
+                    AppIcon(R.drawable.ic_delete, tint = cs.error, size = 20.dp)
+                }
+            }
+        }
     }
 }
 
@@ -218,7 +355,7 @@ private fun EditDialog(
     e: EventEntity,
     events: List<EventEntity>,
     onDismiss: () -> Unit,
-    onSave: (String, String, ZonedDateTime) -> Unit,
+    onSave: (String, String, ZonedDateTime, Int) -> Unit,
 ) {
     val s = e.startLocal()
     var title by rememberSaveable(e.id) { mutableStateOf(e.title) }
@@ -227,6 +364,7 @@ private fun EditDialog(
     var time by rememberSaveable(e.id) {
         mutableStateOf(s.toLocalTime().withSecond(0).withNano(0).toString())
     }
+    var remind by rememberSaveable(e.id) { mutableStateOf(e.remindMinutes.toString()) }
 
     val start = runCatching {
         ZonedDateTime.of(LocalDate.parse(date.trim()), LocalTime.parse(time.trim()), ZoneId.systemDefault())
@@ -242,25 +380,24 @@ private fun EditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.extraLarge,
         title = { Text("Изменить событие") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(title, { title = it }, label = { Text("Название") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(place, { place = it }, label = { Text("Место") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(date, { date = it }, label = { Text("Дата (ГГГГ-ММ-ДД)") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(time, { time = it }, label = { Text("Время (ЧЧ:ММ)") }, modifier = Modifier.fillMaxWidth())
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppField(title, { title = it }, "Название", null)
+                AppField(place, { place = it }, "Место", R.drawable.ic_location)
+                AppField(date, { date = it }, "Дата (ГГГГ-ММ-ДД)", R.drawable.ic_calendar)
+                AppField(time, { time = it }, "Время (ЧЧ:ММ)", R.drawable.ic_clock)
+                AppField(remind, { remind = it }, "Напомнить за (мин)", R.drawable.ic_bell)
                 if (conflicts.isNotEmpty()) {
-                    Text(
-                        "Пересекается с: " + conflicts.joinToString { it.title },
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                    Banner("Пересекается с: " + conflicts.joinToString { it.title }, isError = true)
                 }
             }
         },
         confirmButton = {
             TextButton(
-                enabled = start != null && title.isNotBlank(),
-                onClick = { onSave(title, place, start!!) },
+                enabled = start != null && title.isNotBlank() && remind.trim().toIntOrNull() != null,
+                onClick = { onSave(title, place, start!!, remind.trim().toInt()) },
             ) { Text("Сохранить") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },

@@ -9,8 +9,10 @@ import com.example.schedule.data.EventEntity
 
 object AlarmScheduler {
     fun schedule(ctx: Context, e: EventEntity) {
-        val triggerAt = e.startUtcMillis - e.remindMinutes * 60_000L
-        if (triggerAt <= System.currentTimeMillis()) return
+        val now = System.currentTimeMillis()
+        if (e.startUtcMillis <= now) return                       // событие уже прошло
+        var triggerAt = e.startUtcMillis - e.remindMinutes * 60_000L
+        if (triggerAt <= now) triggerAt = now + 1_000L           // «за N минут» уже прошло: напомнить сразу
         val am = ctx.getSystemService(AlarmManager::class.java)
         val pi = pending(ctx, e.id, e.title)
         // С Android 12 точные будильники требуют разрешения пользователя; без него — неточный

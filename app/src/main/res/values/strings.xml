@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Помощник по расписанию</string>
+    <string name="widget_label">Ближайшие события</string>
+    <string name="widget_description">Список ближайших событий на главном экране</string>
 </resources>
