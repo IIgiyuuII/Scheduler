@@ -37,7 +37,7 @@ private val examples = listOf(
 )
 
 @Composable
-fun AddScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
+fun AddScreen(vm: EventViewModel, access: CalendarAccess, modifier: Modifier = Modifier) {
     val events by vm.events.collectAsState()
     var phrase by rememberSaveable { mutableStateOf("") }
     var showForm by rememberSaveable { mutableStateOf(false) }
@@ -52,6 +52,14 @@ fun AddScreen(vm: EventViewModel, modifier: Modifier = Modifier) {
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        if (!access.granted) {
+            Column {
+                Banner("События не попадут в календарь телефона: нет доступа к нему", isError = false)
+                TextButton(onClick = if (access.permanentlyDenied) access.onOpenSettings else access.onRequest) {
+                    Text(if (access.permanentlyDenied) "Открыть настройки" else "Разрешить доступ")
+                }
+            }
+        }
         AppField(phrase, { phrase = it }, "Что и когда?", R.drawable.ic_sparkle)
 
         Row(

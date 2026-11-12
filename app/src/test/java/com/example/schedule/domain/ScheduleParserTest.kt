@@ -86,4 +86,34 @@ class ScheduleParserTest {
     @Test fun garbageFails() {
         assertEquals(ParseResult.Failed, ScheduleParser.parse("привет как дела", now))
     }
+
+    // ---- Дополнительные случаи: относительные даты, «следующий», полночь, 12-часовой формат ----
+
+    @Test fun relativeMinutesCrossMidnight() {
+        val late = ZonedDateTime.of(2026, 10, 19, 23, 50, 0, 0, zone)
+        val r = ScheduleParser.parse("через 30 минут позвонить", late) as ParseResult.Success
+        assertEquals(at(2026, 10, 20, 0, 20), r.event.start)
+    }
+
+    @Test fun relativeDaysWithTime() {
+        assertEquals(at(2026, 10, 22, 8), ok("через 3 дня в 8 зарядка").start)
+    }
+
+    @Test fun nextMondayKeyword() {
+        val e = ok("в следующий понедельник в 10 планерка")
+        assertEquals(at(2026, 10, 26, 10), e.start)
+        assertEquals("Планерка", e.title)
+    }
+
+    @Test fun tomorrowMidnightIsEndOfTomorrow() {
+        assertEquals(at(2026, 10, 21, 0), ok("завтра в полночь праздник").start)
+    }
+
+    @Test fun noonKeyword() {
+        assertEquals(at(2026, 10, 20, 12), ok("завтра в полдень обед").start)
+    }
+
+    @Test fun eveningDayPart() {
+        assertEquals(at(2026, 10, 20, 19), ok("завтра в 7 вечера ужин").start)
+    }
 }

@@ -2,6 +2,8 @@ package com.example.schedule.data
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 /** Время хранится как момент (UTC millis) + зона, в которой событие создали. */
@@ -14,7 +16,16 @@ data class EventEntity(
     val endUtcMillis: Long,
     val zoneId: String,
     val remindMinutes: Int = 15,
-)
+    /** id события в системном календаре (Calendar Provider); null — в календаре его нет. */
+    val calendarEventId: Long? = null,
+    /** 0 — создано в приложении, 1 — импортировано из системного календаря. */
+    @ColumnInfo(defaultValue = "0") val source: Int = 0,
+) {
+    companion object {
+        const val SOURCE_APP = 0
+        const val SOURCE_CALENDAR = 1
+    }
+}
 
 @Dao
 interface EventDao {
@@ -38,7 +49,15 @@ interface EventDao {
     suspend fun delete(e: EventEntity)
 }
 
-@Database(entities = [EventEntity::class], version = 1, exportSchema = false)
+/** Версия 1 -> 2: связь с системным календарём. Старые события остаются, данные не теряются. */
+private val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE events ADD COLUMN calendarEventId INTEGER")
+        db.execSQL("ALTER TABLE events ADD COLUMN source INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+@Database(entities = [EventEntity::class], version = 2, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun eventDao(): EventDao
 
@@ -46,6 +65,7 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(ctx: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(ctx.applicationContext, AppDb::class.java, "schedule.db")
+                .addMigrations(MIGRATION_1_2)
                 .build().also { instance = it }
         }
     }
