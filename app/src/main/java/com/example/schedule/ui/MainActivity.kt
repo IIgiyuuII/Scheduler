@@ -1,7 +1,10 @@
 package com.example.schedule.ui
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -19,12 +22,25 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import com.example.schedule.R
+import java.time.ZoneId
+import java.util.TimeZone
 
 class MainActivity : ComponentActivity() {
     private val vm: EventViewModel by viewModels()
 
     // id события из виджета; -1 — открывать ничего не нужно
     private var openEventId by mutableLongStateOf(-1L)
+
+    // Часовой пояс устройства: при смене пересобираем интерфейс, чтобы время показалось в новом поясе
+    private var deviceZoneId by mutableStateOf(ZoneId.systemDefault().id)
+    private val zoneReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = refreshZone()
+    }
+
+    private fun refreshZone() {
+        TimeZone.setDefault(null)   // сбросить кэш JVM и взять текущий пояс системы
+        deviceZoneId = ZoneId.systemDefault().id
+    }
 
     // Разрешения календаря
     private var calendarGranted by mutableStateOf(false)
@@ -72,7 +88,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             ScheduleTheme {
-                App(
+                key(deviceZoneId) { App(
                     vm = vm,
                     openEventId = openEventId,
                     onOpenHandled = { openEventId = -1L },
@@ -82,9 +98,22 @@ class MainActivity : ComponentActivity() {
                         onRequest = { calendarLauncher.launch(calendarPermissions) },
                         onOpenSettings = { openAppSettings() },
                     ),
-                )
+                ) }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        refreshZone()
+        ContextCompat.registerReceiver(
+            this, zoneReceiver, IntentFilter(Intent.ACTION_TIMEZONE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unregisterReceiver(zoneReceiver)
     }
 
     override fun onResume() {

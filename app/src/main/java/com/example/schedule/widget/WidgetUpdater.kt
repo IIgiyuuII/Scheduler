@@ -1,16 +1,18 @@
 package com.example.schedule.widget
 
 import android.app.AlarmManager
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.glance.appwidget.updateAll
+import com.example.schedule.domain.EventTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.ZoneId
 
 object WidgetUpdater {
@@ -19,8 +21,7 @@ object WidgetUpdater {
 
     /** Будильник на ближайшую полночь по местному времени: «Сегодня/Завтра» в виджете меняются. */
     fun scheduleMidnight(ctx: Context) {
-        val next = LocalDate.now().plusDays(1)
-            .atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() + 1_000L
+        val next = EventTime.nextMidnight(System.currentTimeMillis(), ZoneId.systemDefault()) + 1_000L
         val am = ctx.getSystemService(AlarmManager::class.java)
         val pi = midnightIntent(ctx)
         if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
@@ -29,6 +30,10 @@ object WidgetUpdater {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next, pi)
         }
     }
+
+    fun hasWidgets(ctx: Context): Boolean =
+        AppWidgetManager.getInstance(ctx)
+            .getAppWidgetIds(ComponentName(ctx, ScheduleWidgetReceiver::class.java)).isNotEmpty()
 
     fun cancelMidnight(ctx: Context) {
         ctx.getSystemService(AlarmManager::class.java).cancel(midnightIntent(ctx))

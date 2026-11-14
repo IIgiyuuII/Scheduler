@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import com.example.schedule.R
 import com.example.schedule.data.EventEntity
 import com.example.schedule.domain.ConflictChecker
+import com.example.schedule.domain.EventTime
 import com.example.schedule.domain.ParseResult
 import com.example.schedule.domain.TimeSlot
 import java.time.*
@@ -334,6 +335,14 @@ private fun EventCard(e: EventEntity, onEdit: () -> Unit, onDelete: () -> Unit) 
                         AppIcon(R.drawable.ic_location, tint = cs.onSurfaceVariant, size = 16.dp)
                         Spacer(Modifier.width(4.dp))
                         Text(it, style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    }
+                }
+                // Если телефон сменил часовой пояс, показываем, на сколько событие назначали изначально
+                EventTime.originNote(e.startUtcMillis, e.zoneId, ZoneId.systemDefault())?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AppIcon(R.drawable.ic_clock, tint = cs.onSurfaceVariant, size = 16.dp)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Исходное время: $it", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {

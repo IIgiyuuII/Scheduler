@@ -63,6 +63,7 @@ class EventViewModel(app: Application) : AndroidViewModel(app) {
                 endUtcMillis = startMs + duration,
                 zoneId = start.zone.id,
                 remindMinutes = remindMinutes,
+                notified = false,   // время изменилось: напоминание снова актуально
             )
             // Импортированные события не пишем обратно в чужой календарь
             if (e.source == EventEntity.SOURCE_APP) {

@@ -20,6 +20,8 @@ data class EventEntity(
     val calendarEventId: Long? = null,
     /** 0 — создано в приложении, 1 — импортировано из системного календаря. */
     @ColumnInfo(defaultValue = "0") val source: Int = 0,
+    /** Уведомление-напоминание уже показано: после перезагрузки его не нужно повторять. */
+    @ColumnInfo(defaultValue = "0") val notified: Boolean = false,
 ) {
     companion object {
         const val SOURCE_APP = 0
@@ -39,6 +41,9 @@ interface EventDao {
     @Query("SELECT * FROM events WHERE endUtcMillis > :now ORDER BY startUtcMillis LIMIT :limit")
     suspend fun upcoming(now: Long, limit: Int): List<EventEntity>
 
+    @Query("UPDATE events SET notified = 1 WHERE id = :id")
+    suspend fun markNotified(id: Long)
+
     @Insert
     suspend fun insert(e: EventEntity): Long
 
@@ -57,7 +62,14 @@ private val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [EventEntity::class], version = 2, exportSchema = false)
+/** Версия 2 -> 3: признак «напоминание показано». */
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE events ADD COLUMN notified INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+@Database(entities = [EventEntity::class], version = 3, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun eventDao(): EventDao
 
@@ -65,7 +77,7 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(ctx: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(ctx.applicationContext, AppDb::class.java, "schedule.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { instance = it }
         }
     }
